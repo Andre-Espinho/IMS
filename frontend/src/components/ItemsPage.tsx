@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api'
+import { api, ApiError } from '../api'
 import type { ItemSummary, Location } from '../api'
 import { errorMessage, formatDate, useI18n } from '../i18n'
 
@@ -27,6 +27,8 @@ export function ItemsPage({ locations, onOpen, onNew, refreshKey }: Props) {
   const [total, setTotal] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   const estantes = [...new Set(locations.map((l) => l.estante).filter((e): e is number => e !== null))].sort(
     (a, b) => a - b,
@@ -70,6 +72,30 @@ export function ItemsPage({ locations, onOpen, onNew, refreshKey }: Props) {
   const from = total === 0 ? 0 : offset + 1
   const to = Math.min(offset + PAGE_SIZE, total)
 
+  // Downloads the inventory as an Excel workbook built from the database.
+  async function exportExcel() {
+    setExporting(true)
+    setExportError(null)
+    try {
+      const response = await fetch('/api/export/xlsx')
+      if (!response.ok) throw new ApiError(String(response.status), 'http', response.status)
+      const blob = await response.blob()
+      const name = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')?.[1] ?? 'Inventario.xlsx'
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = name
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (err) {
+      setExportError(errorMessage(err, t, 'errors.export'))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   // Click a header: new column sorts ascending; same column flips the direction.
   function toggleSort(key: SortKey) {
     if (sort === key) {
@@ -100,9 +126,14 @@ export function ItemsPage({ locations, onOpen, onNew, refreshKey }: Props) {
       <header className="page-header">
         <h1>{t('items.title')}</h1>
         <span className="muted">{t('items.count', { count: total })}</span>
-        <button className="primary push-right" onClick={onNew}>
-          {t('items.new')}
-        </button>
+        <div className="push-right header-actions">
+          <button onClick={exportExcel} disabled={exporting}>
+            {exporting ? t('common.processing') : t('items.export')}
+          </button>
+          <button className="primary" onClick={onNew}>
+            {t('items.new')}
+          </button>
+        </div>
       </header>
 
       <div className="toolbar">
@@ -154,6 +185,7 @@ export function ItemsPage({ locations, onOpen, onNew, refreshKey }: Props) {
       </div>
 
       {error && <p className="error">{error}</p>}
+      {exportError && <p className="error">{exportError}</p>}
 
       <div className="table-wrap">
         <table>

@@ -140,6 +140,8 @@ const pt = {
 
   'nav.locations': 'Localizações',
   'items.new': 'Novo item',
+  'items.export': 'Exportar Excel',
+  'errors.export': 'Erro ao exportar o ficheiro',
   'items.status.active': 'Ativos',
   'items.status.inactive': 'Inativos',
   'items.status.all': 'Todos os estados',
@@ -358,6 +360,8 @@ const en: Record<Key, string> = {
 
   'nav.locations': 'Locations',
   'items.new': 'New item',
+  'items.export': 'Export Excel',
+  'errors.export': 'Error exporting the file',
   'items.status.active': 'Active',
   'items.status.inactive': 'Inactive',
   'items.status.all': 'All statuses',

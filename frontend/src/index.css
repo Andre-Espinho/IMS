@@ -492,6 +492,11 @@ button.small {
   margin-left: auto;
 }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .actions {
   display: flex;
   gap: 8px;

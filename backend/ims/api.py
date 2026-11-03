@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import tempfile
+from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import Response
+from openpyxl import Workbook
+from openpyxl.styles import Font
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import String, cast, delete, func, or_, select
 from sqlalchemy.orm import Session
@@ -483,6 +488,80 @@ def list_movements(
     labels = _location_labels(session)
     voided = _voided_ids(session)
     return [_movement_dict(m, labels, voided) for m in session.scalars(stmt.limit(limit)).all()]
+
+
+# ---------- export ----------
+
+EXPORT_COLUMNS = [
+    "DESCRICAO", "MARCA", "REFERENCIA", "id", "QTD_STOCK",
+    "PRATELEIRA", "ESTANTE", "S_N", "EAN", "Verificado",
+]
+
+
+def _local_date(value: datetime | None) -> str | None:
+    """Verified date as YYYY-MM-DD in local time. Stored datetimes are UTC (naive on SQLite)."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone().date().isoformat()
+
+
+@router.get("/export/xlsx")
+def export_xlsx(session: Session = Depends(get_session)):
+    """Builds the inventory workbook from the database, in the layout of the imported sheet.
+
+    One row per item and stocked location; items with no stock get one row with quantity 0.
+    Inactive items are left out.
+    """
+    stamp = datetime.now()
+    items = session.scalars(select(Item).where(Item.active.is_(True)).order_by(Item.id)).all()
+    placed: dict[int, list[tuple[Location, int]]] = {}
+    for stock_row, loc in session.execute(
+        select(Stock, Location).join(Location, Location.id == Stock.location_id).where(Stock.qty > 0)
+    ).all():
+        placed.setdefault(stock_row.item_id, []).append((loc, stock_row.qty))
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"INVENTARIO {stamp:%Y%m%d-%H%M%S}"[:31]  # Excel limits sheet names to 31 characters
+    ws.append(EXPORT_COLUMNS)
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+    ws.freeze_panes = "A2"
+
+    for item in items:
+        placements = sorted(
+            placed.get(item.id, []),
+            key=lambda p: (p[0].estante or 0, p[0].prateleira or ""),
+        ) or [(None, 0)]
+        verified = _local_date(item.verified_at)
+        for loc, qty in placements:
+            located = loc is not None and loc.id != UNASSIGNED_LOCATION_ID
+            ws.append([
+                item.description,
+                item.brand,
+                item.reference,
+                item.id,
+                qty,
+                loc.prateleira if located else None,
+                loc.estante if located else None,
+                item.serial_number,
+                item.ean,
+                verified,
+            ])
+
+    for index, width in enumerate([48, 18, 20, 8, 12, 14, 10, 20, 16, 14], start=1):
+        ws.column_dimensions[ws.cell(row=1, column=index).column_letter].width = width
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    filename = f"Inventario-{stamp:%Y%m%d-%H%M%S}.xlsx"
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ---------- local data reset ----------
