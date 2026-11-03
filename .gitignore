@@ -1,0 +1,15 @@
+# Node / Electron
+node_modules/
+frontend/dist/
+frontend/release/
+
+# Python
+backend/.venv/
+__pycache__/
+.pytest_cache/
+
+# Local data (business data stays out of git)
+data/
+exports/
+.env
+*.xlsx
