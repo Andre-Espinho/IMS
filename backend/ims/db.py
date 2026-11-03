@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from sqlalchemy import create_engine, event
@@ -11,7 +12,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from .models import UNASSIGNED_LOCATION_ID, UNASSIGNED_LOCATION_LABEL, Base, Location
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_DB_PATH = REPO_ROOT / "data" / "ims.sqlite3"
+# Local data folder. The packaged app sets IMS_DATA_DIR to the user's app-data folder.
+DATA_DIR = Path(os.environ["IMS_DATA_DIR"]) if os.environ.get("IMS_DATA_DIR") else REPO_ROOT / "data"
+DEFAULT_DB_PATH = DATA_DIR / "ims.sqlite3"
 
 
 def make_engine(db_path: Path | str | None = None) -> Engine:

@@ -20,14 +20,14 @@ from pathlib import Path
 import msal
 import requests
 
-from .db import REPO_ROOT
+from .db import DATA_DIR
 
 GRAPH = "https://graph.microsoft.com/v1.0"
 # Narrowest delegated permission that can open a file through its sharing link.
 # Files.Read.All needed admin approval in the tenant; Files.Read often does not.
 SCOPES = ["Files.Read"]
-CONFIG_PATH = REPO_ROOT / "data" / "sharepoint.json"
-CACHE_PATH = REPO_ROOT / "data" / "msal_cache.bin"
+CONFIG_PATH = DATA_DIR / "sharepoint.json"
+CACHE_PATH = DATA_DIR / "msal_cache.bin"
 
 # Link to the workbook in bridgepointeng.sharepoint.com (session parameters removed).
 DEFAULT_SHARE_URL = (

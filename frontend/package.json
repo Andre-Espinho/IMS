@@ -1,15 +1,50 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "IMS: inventory management system",
+  "author": "BridgePoint",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "electron:dev": "concurrently -k -n vite,electron \"vite\" \"wait-on tcp:5173 && electron .\"",
     "build": "tsc -b && vite build",
+    "dist": "npm run build && electron-builder --win",
     "lint": "eslint .",
     "preview": "vite preview"
+  },
+  "build": {
+    "appId": "pt.bridgepoint.ims",
+    "productName": "IMS",
+    "directories": {
+      "output": "../release"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../build-output/backend/ims-backend",
+        "to": "backend"
+      },
+      {
+        "from": "dist",
+        "to": "web"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "IMS"
+    }
   },
   "dependencies": {
     "react": "^19.3.1",

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.engine import Engine
 
 from .api import router
@@ -39,6 +42,12 @@ def create_app(engine: Engine | None = None, sharepoint: object | None = None) -
         with request.app.state.engine.connect() as conn:
             conn.exec_driver_sql("SELECT 1")
         return {"status": "ok"}
+
+    # The packaged app serves the built UI from the same address as the API.
+    # Mounted last so /api routes always take precedence.
+    web_dir = os.environ.get("IMS_WEB_DIR")
+    if web_dir and Path(web_dir).is_dir():
+        app.mount("/", StaticFiles(directory=web_dir, html=True), name="web")
 
     return app
 

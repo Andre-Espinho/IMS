@@ -5,10 +5,32 @@ const path = require('node:path')
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..')
 const BACKEND_DIR = path.join(REPO_ROOT, 'backend')
-// Override with IMS_PYTHON if the venv lives elsewhere.
+// Override with IMS_PYTHON if the venv lives elsewhere (development only).
 const PYTHON = process.env.IMS_PYTHON || path.join(BACKEND_DIR, '.venv', 'Scripts', 'python.exe')
 const BACKEND_PORT = 8000
 const DEV_URL = 'http://localhost:5173'
+const PACKAGED_URL = `http://127.0.0.1:${BACKEND_PORT}/`
+
+// Packaged builds ship the frozen backend and the built UI in resources/ (see package.json "build").
+function backendCommand() {
+  if (app.isPackaged) {
+    return {
+      command: path.join(process.resourcesPath, 'backend', 'ims-backend.exe'),
+      args: [],
+      cwd: path.join(process.resourcesPath, 'backend'),
+      env: {
+        IMS_DATA_DIR: path.join(app.getPath('userData'), 'data'),
+        IMS_WEB_DIR: path.join(process.resourcesPath, 'web'),
+      },
+    }
+  }
+  return {
+    command: PYTHON,
+    args: ['-m', 'uvicorn', 'ims.main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)],
+    cwd: BACKEND_DIR,
+    env: { PYTHONPATH: BACKEND_DIR, PYTHONIOENCODING: 'utf-8' },
+  }
+}
 
 let backend = null
 let quitting = false
@@ -21,15 +43,12 @@ function remember(line) {
 }
 
 function startBackend() {
-  backend = spawn(
-    PYTHON,
-    ['-m', 'uvicorn', 'ims.main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)],
-    {
-      cwd: BACKEND_DIR,
-      env: { ...process.env, PYTHONPATH: BACKEND_DIR, PYTHONIOENCODING: 'utf-8' },
-      windowsHide: true,
-    },
-  )
+  const cmd = backendCommand()
+  backend = spawn(cmd.command, cmd.args, {
+    cwd: cmd.cwd,
+    env: { ...process.env, ...cmd.env },
+    windowsHide: true,
+  })
   backend.stdout.on('data', (d) => d.toString().trimEnd().split('\n').forEach(remember))
   backend.stderr.on('data', (d) => d.toString().trimEnd().split('\n').forEach(remember))
   backend.on('error', (err) => {
@@ -67,12 +86,13 @@ function createWindow() {
     },
   })
 
-  if (app.isPackaged) {
-    // Packaged builds serve the compiled UI from disk. Backend packaging is a later step.
-    win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
-  } else {
-    win.loadURL(DEV_URL)
-  }
+  // Packaged: the backend serves the UI at the same address. Development: the Vite dev server.
+  const url = app.isPackaged ? PACKAGED_URL : DEV_URL
+  // The backend may still be starting; retry the page load until it answers.
+  win.webContents.on('did-fail-load', (_event, _code, _desc, _failedUrl, isMainFrame) => {
+    if (isMainFrame && !quitting && !win.isDestroyed()) setTimeout(() => win.loadURL(url), 500)
+  })
+  win.loadURL(url)
 }
 
 app.whenReady().then(() => {
